@@ -1,0 +1,37 @@
+{
+  "name": "factchecker-api",
+  "version": "1.0.0",
+  "description": "YouTube Video Fact Checker API using Gemini 1.5 Flash",
+  "main": "src/handlers/main.js",
+  "scripts": {
+    "start:local": "NODE_ENV=local nodemon src/handlers/main.js",
+    "start:dev": "NODE_ENV=dev node src/handlers/main.js",
+    "start:prod": "NODE_ENV=production node src/handlers/main.js"
+  },
+  "author": "Kunal Chikte",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.13.2",
+    "bcryptjs": "^2.4.3",
+    "compression": "^1.7.4",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1",
+    "express-rate-limit": "^7.4.1",
+    "express-validator": "^7.2.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.7.0",
+    "nodemon": "^3.1.11",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.0",
+    "speakeasy": "^2.0.0",
+    "youtube-transcript": "^1.2.1"
+  },
+  "devDependencies": {
+    "eslint": "^9.12.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

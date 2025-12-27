@@ -1,0 +1,131 @@
+.url-input-form {
+  width: 100%;
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.input-wrapper {
+  display: flex;
+  align-items: center;
+  background: var(--surface-elevated);
+  border: 2px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 0.5rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+}
+
+.input-wrapper:focus-within {
+  border-color: var(--accent-primary);
+  box-shadow: 0 4px 32px rgba(99, 102, 241, 0.15);
+}
+
+.input-icon {
+  padding: 0 0.75rem;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+}
+
+.url-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 1rem;
+  color: var(--text-primary);
+  padding: 0.75rem 0;
+  font-family: inherit;
+}
+
+.url-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.url-input:disabled {
+  opacity: 0.6;
+}
+
+.submit-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.875rem 1.5rem;
+  background: var(--gradient-primary);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: inherit;
+}
+
+.submit-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.35);
+}
+
+.submit-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.submit-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.input-error {
+  color: var(--status-false);
+  font-size: 0.875rem;
+  margin-top: 0.75rem;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .input-wrapper {
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+
+  .input-icon {
+    display: none;
+  }
+
+  .url-input {
+    width: 100%;
+    text-align: center;
+  }
+
+  .submit-button {
+    width: 100%;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  .button-text {
+    display: inline;
+  }
+}
+
+@media (min-width: 641px) {
+  .button-text {
+    display: inline;
+  }
+}
+
