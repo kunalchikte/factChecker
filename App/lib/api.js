@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export async function analyzeVideo(youtubeUrl) {
   const response = await fetch(`${API_BASE_URL}/fact-check/analyze`, {
@@ -7,6 +7,24 @@ export async function analyzeVideo(youtubeUrl) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ youtubeUrl }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.msg || `HTTP error! status: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data;
+}
+
+// Fetch analysis result from history API by video ID
+export async function getHistoryByVideoId(videoId) {
+  const response = await fetch(`${API_BASE_URL}/fact-check/history/${videoId}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
   });
 
   if (!response.ok) {

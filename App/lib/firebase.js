@@ -2,7 +2,6 @@ import { initializeApp, getApps } from 'firebase/app';
 import { 
   getAuth, 
   GoogleAuthProvider, 
-  OAuthProvider,
   signInWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged
@@ -29,10 +28,6 @@ googleProvider.setCustomParameters({
   prompt: 'select_account'
 });
 
-const appleProvider = new OAuthProvider('apple.com');
-appleProvider.addScope('email');
-appleProvider.addScope('name');
-
 // Sign in with Google
 export async function signInWithGoogle() {
   try {
@@ -40,17 +35,6 @@ export async function signInWithGoogle() {
     return { user: result.user, error: null };
   } catch (error) {
     console.error('Google sign-in error:', error);
-    return { user: null, error: error.message };
-  }
-}
-
-// Sign in with Apple
-export async function signInWithApple() {
-  try {
-    const result = await signInWithPopup(auth, appleProvider);
-    return { user: result.user, error: null };
-  } catch (error) {
-    console.error('Apple sign-in error:', error);
     return { user: null, error: error.message };
   }
 }

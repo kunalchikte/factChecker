@@ -64,7 +64,7 @@ export function HistoryClient() {
         <div className="history-list">
           {history.map((item) => (
             <HistoryCard 
-              key={item.id} 
+              key={item.videoId} 
               item={item} 
               onDelete={removeFromHistory}
             />

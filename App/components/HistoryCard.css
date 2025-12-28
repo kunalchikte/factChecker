@@ -95,12 +95,41 @@
 }
 
 .history-trust {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--accent-primary);
-  background: var(--accent-primary-muted);
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
+}
+
+.history-trust.trust-high {
+  color: var(--status-verified);
+  background: var(--status-verified-bg);
+}
+
+.history-trust.trust-medium {
+  color: var(--status-speculative);
+  background: var(--status-speculative-bg);
+}
+
+.history-trust.trust-low {
+  color: var(--status-false);
+  background: var(--status-false-bg);
+}
+
+.history-trust.trust-unknown {
+  color: var(--text-tertiary);
+  background: var(--surface-elevated);
+}
+
+.trust-level-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  letter-spacing: 0.5px;
 }
 
 .history-arrow {

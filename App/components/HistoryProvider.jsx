@@ -1,9 +1,10 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 
 const HistoryContext = createContext(null);
 
+// Hook for storing video IDs in localStorage
 function useLocalStorage(key, initialValue) {
   const [storedValue, setStoredValue] = useState(initialValue);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -35,37 +36,77 @@ function useLocalStorage(key, initialValue) {
 }
 
 export function HistoryProvider({ children }) {
-  const [history, setHistory, isHydrated] = useLocalStorage('factcheck-history', []);
+  // Store only video IDs with timestamps in localStorage
+  const [videoHistory, setVideoHistory, isHydrated] = useLocalStorage('factcheck-video-history', []);
+  
+  // In-memory cache for full result data (current session only)
+  const resultCache = useRef(new Map());
 
+  // Add a new result to history - stores only video ID, caches full data
   const addToHistory = (result) => {
+    const videoId = result.data?.video?.id;
+    if (!videoId) {
+      console.error('No video ID found in result');
+      return null;
+    }
+
     const newEntry = {
-      id: Date.now().toString(),
+      videoId,
       timestamp: new Date().toISOString(),
-      ...result
+      title: result.data?.video?.title || 'Unknown Video',
+      trustScore: result.data?.trust?.score || 0,
+      trustLevel: result.data?.trust?.level || 'UNKNOWN',
     };
-    setHistory(prev => [newEntry, ...prev]);
-    return newEntry;
+
+    // Cache the full result for this session
+    resultCache.current.set(videoId, result);
+
+    // Add to localStorage (only essential data)
+    setVideoHistory(prev => {
+      // Remove duplicate if exists
+      const filtered = prev.filter(item => item.videoId !== videoId);
+      return [newEntry, ...filtered];
+    });
+
+    return { id: videoId, ...newEntry };
   };
 
-  const removeFromHistory = (id) => {
-    setHistory(prev => prev.filter(item => item.id !== id));
+  // Remove from history
+  const removeFromHistory = (videoId) => {
+    setVideoHistory(prev => prev.filter(item => item.videoId !== videoId));
+    resultCache.current.delete(videoId);
   };
 
+  // Clear all history
   const clearHistory = () => {
-    setHistory([]);
+    setVideoHistory([]);
+    resultCache.current.clear();
   };
 
-  const getHistoryItem = (id) => {
-    return history.find(item => item.id === id);
+  // Get cached result data (for current session)
+  const getCachedResult = (videoId) => {
+    return resultCache.current.get(videoId) || null;
+  };
+
+  // Cache result data (when fetched from API)
+  const cacheResult = (videoId, result) => {
+    resultCache.current.set(videoId, result);
+  };
+
+  // Get history entry by video ID (basic info only)
+  const getHistoryEntry = (videoId) => {
+    return videoHistory.find(item => item.videoId === videoId);
   };
 
   return (
     <HistoryContext.Provider value={{
-      history,
+      history: videoHistory,
       addToHistory,
       removeFromHistory,
       clearHistory,
-      getHistoryItem,
+      getCachedResult,
+      cacheResult,
+      getHistoryEntry,
       isHydrated
     }}>
       {children}

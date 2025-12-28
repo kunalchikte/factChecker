@@ -1,40 +1,86 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, FileText, Clock } from 'lucide-react';
+import { ArrowLeft, FileText, Clock, Loader2 } from 'lucide-react';
 import { VideoInfo } from '@/components/VideoInfo';
 import { TrustMeter } from '@/components/TrustMeter';
 import { ClaimCard } from '@/components/ClaimCard';
 import { StatsPanel } from '@/components/StatsPanel';
 import { useHistoryContext } from '@/components/HistoryProvider';
+import { getHistoryByVideoId } from '@/lib/api';
 import './Result.css';
 
 export function ResultClient({ id }) {
   const router = useRouter();
-  const { getHistoryItem, isHydrated } = useHistoryContext();
+  const { getCachedResult, cacheResult, isHydrated } = useHistoryContext();
+  
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  if (!isHydrated) {
+  // id is the video ID (e.g., "MsQACpcuTkU")
+  const videoId = id;
+
+  useEffect(() => {
+    async function loadResult() {
+      if (!isHydrated) return;
+
+      setLoading(true);
+      setError(null);
+
+      // First, check if we have cached data from this session
+      const cachedData = getCachedResult(videoId);
+      if (cachedData) {
+        setResult(cachedData);
+        setLoading(false);
+        return;
+      }
+
+      // If not cached, fetch from history API
+      try {
+        const response = await getHistoryByVideoId(videoId);
+        if (response.status === 200 && response.data) {
+          // Cache the result for future use in this session
+          cacheResult(videoId, response);
+          setResult(response);
+        } else {
+          setError('Analysis not found');
+        }
+      } catch (err) {
+        console.error('Failed to fetch result:', err);
+        setError(err.message || 'Failed to load analysis');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadResult();
+  }, [videoId, isHydrated, getCachedResult, cacheResult]);
+
+  if (!isHydrated || loading) {
     return (
       <div className="result-page">
-        <div className="result-loading">Loading...</div>
+        <div className="result-loading">
+          <Loader2 size={32} className="spinner" />
+          <p>Loading analysis...</p>
+        </div>
       </div>
     );
   }
 
-  const item = getHistoryItem(id);
-
-  if (!item) {
+  if (error || !result) {
     return (
       <div className="result-not-found">
         <h2>Result not found</h2>
-        <p>This analysis may have been deleted or doesn&apos;t exist.</p>
+        <p>{error || 'This analysis may have been deleted or doesn\'t exist.'}</p>
         <Link href="/" className="back-home-btn">Go to Home</Link>
       </div>
     );
   }
 
-  const { data } = item;
+  const { data } = result;
   const { video, summary, factCheck, trust, analysisNote, processingTime } = data;
 
   const allClaims = [

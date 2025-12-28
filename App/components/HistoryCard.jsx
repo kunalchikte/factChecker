@@ -2,8 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { Clock, Trash2, ChevronRight, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
-import { formatDuration } from '@/lib/api';
+import { Clock, Trash2, ChevronRight, Shield } from 'lucide-react';
 import './HistoryCard.css';
 
 export function HistoryCard({ item, onDelete }) {
@@ -18,15 +17,26 @@ export function HistoryCard({ item, onDelete }) {
     });
   };
 
-  const thumbnailUrl = `https://img.youtube.com/vi/${item.data?.video?.id}/mqdefault.jpg`;
+  // Use videoId for thumbnail and navigation
+  const thumbnailUrl = `https://img.youtube.com/vi/${item.videoId}/mqdefault.jpg`;
+
+  // Get trust level color
+  const getTrustColor = (level) => {
+    switch (level?.toUpperCase()) {
+      case 'HIGH': return 'trust-high';
+      case 'MEDIUM': return 'trust-medium';
+      case 'LOW': return 'trust-low';
+      default: return 'trust-unknown';
+    }
+  };
 
   return (
     <div className="history-card">
-      <Link href={`/result/${item.id}`} className="history-link">
+      <Link href={`/result/${item.videoId}`} className="history-link">
         <div className="history-thumbnail">
           <Image 
             src={thumbnailUrl} 
-            alt={item.data?.video?.title || 'Video thumbnail'}
+            alt={item.title || 'Video thumbnail'}
             width={120}
             height={68}
             unoptimized
@@ -34,36 +44,22 @@ export function HistoryCard({ item, onDelete }) {
         </div>
         
         <div className="history-content">
-          <h3 className="history-title">{item.data?.video?.title}</h3>
+          <h3 className="history-title">{item.title || 'Unknown Video'}</h3>
           
           <div className="history-meta">
             <span className="history-date">
               <Clock size={12} />
               {formatDate(item.timestamp)}
             </span>
-            
-            {item.data?.video?.durationSeconds && (
-              <span className="history-duration">
-                {formatDuration(item.data.video.durationSeconds)}
-              </span>
-            )}
           </div>
 
           <div className="history-stats">
-            <span className="history-stat verified">
-              <CheckCircle size={12} />
-              {item.data?.factCheck?.correctClaims?.length || 0}
+            <span className={`history-trust ${getTrustColor(item.trustLevel)}`}>
+              <Shield size={12} />
+              Trust: {item.trustScore || 0}%
             </span>
-            <span className="history-stat false">
-              <XCircle size={12} />
-              {item.data?.factCheck?.incorrectClaims?.length || 0}
-            </span>
-            <span className="history-stat speculative">
-              <AlertTriangle size={12} />
-              {item.data?.factCheck?.speculativeClaims?.length || 0}
-            </span>
-            <span className="history-trust">
-              Trust: {item.data?.trust?.score}%
+            <span className="trust-level-badge">
+              {item.trustLevel || 'UNKNOWN'}
             </span>
           </div>
         </div>
@@ -75,7 +71,7 @@ export function HistoryCard({ item, onDelete }) {
         className="history-delete"
         onClick={(e) => {
           e.preventDefault();
-          onDelete(item.id);
+          onDelete(item.videoId);
         }}
         title="Remove from history"
       >

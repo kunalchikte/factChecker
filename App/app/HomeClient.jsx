@@ -52,7 +52,10 @@ export function HomeClient() {
 
   const proceedWithResult = (response) => {
     const historyItem = addToHistory(response);
-    router.push(`/result/${historyItem.id}`);
+    if (historyItem) {
+      // Navigate using video ID, not timestamp
+      router.push(`/result/${historyItem.videoId}`);
+    }
   };
 
   const handleLoginSuccess = (loggedInUser) => {
