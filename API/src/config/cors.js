@@ -1,23 +1,27 @@
 const cors = require("cors");
 
 module.exports = function (app) {
-	const isProduction = process.env.NODE_ENV === "production" || process.env.NODE_ENV === "prod";
-	
 	// Get allowed origins from environment variable
-	// In production, specify exact origins; in development, allow all
-	let allowedOrigins = process.env.CORS_ORIGINS 
-		? process.env.CORS_ORIGINS.split(",").map(origin => origin.trim())
-		: [];
+	// Set CORS_ORIGINS=* to allow all, or comma-separated list of origins
+	const corsOriginsEnv = process.env.CORS_ORIGINS;
+	
+	let allowedOrigins = [];
+	let allowAll = false;
 
-	// Default development origins
-	if (!isProduction && allowedOrigins.length === 0) {
+	if (corsOriginsEnv === "*") {
+		allowAll = true;
+	} else if (corsOriginsEnv) {
+		allowedOrigins = corsOriginsEnv.split(",").map(origin => origin.trim());
+	} else {
+		// Default origins when CORS_ORIGINS is not set
 		allowedOrigins = [
 			"http://localhost:3000",
 			"http://localhost:3001",
-			"http://localhost:5173", // Vite default
+			"http://localhost:5173",
 			"http://localhost:8080",
 			"http://127.0.0.1:3000",
 			"http://127.0.0.1:5173",
+			// Add your production origins here or set via CORS_ORIGINS env
 			"http://3.110.103.228:3000",
 			"http://factchecker.kunalchikte.in",
 			"https://factchecker.kunalchikte.in"
@@ -26,22 +30,23 @@ module.exports = function (app) {
 
 	const corsOptions = {
 		origin: function (origin, callback) {
-			// Allow requests with no origin (mobile apps, curl, Postman)
+			// Allow requests with no origin (mobile apps, curl, Postman, server-to-server)
 			if (!origin) {
 				return callback(null, true);
 			}
 
-			// In development with no specific origins, allow all
-			if (!isProduction && allowedOrigins.length === 0) {
+			// Allow all origins if configured
+			if (allowAll) {
 				return callback(null, true);
 			}
 
-			// Check if origin is allowed
-			if (allowedOrigins.includes(origin) || allowedOrigins.includes("*")) {
+			// Check if origin is in allowed list
+			if (allowedOrigins.includes(origin)) {
 				return callback(null, true);
 			}
 
-			// Block the request
+			// Log blocked origin for debugging
+			console.log(`[CORS] Blocked origin: ${origin}`);
 			callback(new Error("Not allowed by CORS"));
 		},
 		methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -54,14 +59,15 @@ module.exports = function (app) {
 		],
 		exposedHeaders: ["X-RateLimit-Limit", "X-RateLimit-Remaining"],
 		credentials: true,
-		maxAge: 86400, // 24 hours preflight cache
+		maxAge: 86400,
 		optionsSuccessStatus: 200
 	};
 
+	// Handle preflight requests explicitly
+	app.options("*", cors(corsOptions));
+	
+	// Apply CORS to all routes
 	app.use(cors(corsOptions));
 
-	// Log CORS configuration
-	if (!isProduction) {
-		console.log(`CORS enabled for origins: ${allowedOrigins.length > 0 ? allowedOrigins.join(", ") : "all (development mode)"}`);
-	}
+	console.log(`CORS enabled: ${allowAll ? "ALL ORIGINS" : allowedOrigins.join(", ")}`);
 };
