@@ -3,8 +3,12 @@ const fs = require("fs");
 const path = require("path");
 
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com";
-// Using gemini-2.5-flash-lite for free tier access
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+
+// Model selection - gemini-1.5-flash is recommended for video/audio processing
+// gemini-2.0-flash-exp or gemini-1.5-flash have better multimodal support
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+
+console.log(`[Gemini] Using model: ${GEMINI_MODEL}`);
 
 /**
  * Builds the optimized prompt for information extraction and verification
@@ -277,14 +281,45 @@ const uploadVideoToGemini = async (filePath, fileName, apiKey, mimeType = "video
 const waitForFileProcessing = async (fileName, apiKey) => {
 	const maxAttempts = 60;
 	const delayMs = 3000; // 3 seconds between polls
-	let lastError = null;
+	let consecutiveErrors = 0;
 
 	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
 		try {
 			const response = await axios.get(
 				`${GEMINI_API_BASE}/v1beta/${fileName}?key=${apiKey}`,
-				{ timeout: 30000 }
+				{ 
+					timeout: 30000,
+					headers: {
+						"Accept": "application/json"
+					},
+					// Force JSON parsing, handle errors manually
+					transformResponse: [(data) => {
+						try {
+							return JSON.parse(data);
+						} catch (e) {
+							// Return raw data if not JSON
+							return { _raw: data, _parseError: true };
+						}
+					}]
+				}
 			);
+
+			// Check if response was parseable
+			if (response.data._parseError) {
+				console.log(`[Gemini] Non-JSON response (attempt ${attempt}):`, 
+					typeof response.data._raw === 'string' ? response.data._raw.substring(0, 200) : 'unknown');
+				consecutiveErrors++;
+				
+				if (consecutiveErrors >= 5) {
+					return { status: 500, msg: "Gemini returning invalid responses", data: null };
+				}
+				
+				await new Promise(resolve => setTimeout(resolve, delayMs));
+				continue;
+			}
+
+			// Reset error counter on successful parse
+			consecutiveErrors = 0;
 
 			const state = response.data.state;
 			
@@ -305,7 +340,7 @@ const waitForFileProcessing = async (fileName, apiKey) => {
 			await new Promise(resolve => setTimeout(resolve, delayMs));
 
 		} catch (error) {
-			lastError = error;
+			consecutiveErrors++;
 			const errorMsg = error.response?.data?.error?.message || error.message;
 			console.log(`[Gemini] Status check error (attempt ${attempt}): ${errorMsg}`);
 			
@@ -314,9 +349,8 @@ const waitForFileProcessing = async (fileName, apiKey) => {
 				return { status: 404, msg: "File not found in Gemini", data: null };
 			}
 			
-			// For other errors, retry a few times before giving up
-			if (attempt >= 3) {
-				// After 3 consecutive errors, give up
+			// For consecutive errors, give up after 5
+			if (consecutiveErrors >= 5) {
 				return { status: 500, msg: `Failed to check file status: ${errorMsg}`, data: null };
 			}
 			
