@@ -1,5 +1,6 @@
 const youtubeService = require("./youtubeService");
 const geminiService = require("./geminiService");
+const FactCheckHistory = require("../models/factCheckHistoryModel");
 
 /**
  * Formats the fact check response for frontend consumption
@@ -36,6 +37,48 @@ const formatResponse = (analysisData, videoId, originalUrl, metadata = {}) => {
 		method: metadata.method || "unknown",
 		processingTime: metadata.processingTime || "unknown"
 	};
+};
+
+/**
+ * Saves or updates fact check result in database
+ * @param {string} videoId - YouTube video ID
+ * @param {Object} formattedResponse - Formatted response data
+ * @param {Object} rawAnalysis - Raw Gemini analysis result
+ * @param {string} method - Analysis method used (transcript/video)
+ */
+const saveToHistory = async (videoId, formattedResponse, rawAnalysis, method) => {
+	try {
+		// Check if database is available
+		const mongoose = require("mongoose");
+		if (mongoose.connection.readyState !== 1) {
+			console.log(`[FactChecker] Database not connected, skipping history save`);
+			return null;
+		}
+
+		const historyData = {
+			youtubeUrl: formattedResponse.video.url,
+			videoTitle: formattedResponse.video.title,
+			analysisMethod: method,
+			analysisResult: rawAnalysis, // Store complete JSON response
+			summary: formattedResponse.summary,
+			videoTopic: formattedResponse.video.topic,
+			trustScore: formattedResponse.trust.score,
+			trustLevel: formattedResponse.trust.level,
+			totalClaims: formattedResponse.factCheck.totalClaims,
+			correctClaimsCount: formattedResponse.factCheck.correctClaims.length,
+			incorrectClaimsCount: formattedResponse.factCheck.incorrectClaims.length,
+			speculativeClaimsCount: formattedResponse.factCheck.speculativeClaims.length,
+			processingTime: parseFloat(formattedResponse.processingTime) || 0
+		};
+
+		const savedRecord = await FactCheckHistory.upsertByVideoId(videoId, historyData);
+		console.log(`[FactChecker] History saved/updated for video: ${videoId}`);
+		return savedRecord;
+
+	} catch (error) {
+		console.error(`[FactChecker] Failed to save history: ${error.message}`);
+		return null;
+	}
 };
 
 /**
@@ -83,14 +126,19 @@ exports.analyzeYouTubeVideo = async (youtubeUrl) => {
 				console.log(`\n[FactChecker] ✓ Analysis complete in ${elapsed}s (transcript method)`);
 				console.log(`${"=".repeat(60)}\n`);
 
+				const formattedData = formatResponse(analysisResult.data, videoId, youtubeUrl, {
+					durationSeconds: transcriptResult.data.durationSeconds,
+					method: "transcript",
+					processingTime: `${elapsed}s`
+				});
+
+				// Save to history (non-blocking)
+				saveToHistory(videoId, formattedData, analysisResult.data, "transcript");
+
 				return {
 					status: 200,
 					msg: "Video fact-checked successfully",
-					data: formatResponse(analysisResult.data, videoId, youtubeUrl, {
-						durationSeconds: transcriptResult.data.durationSeconds,
-						method: "transcript",
-						processingTime: `${elapsed}s`
-					})
+					data: formattedData
 				};
 			}
 
@@ -135,15 +183,20 @@ exports.analyzeYouTubeVideo = async (youtubeUrl) => {
 		console.log(`\n[FactChecker] ✓ Analysis complete in ${elapsed}s (video method)`);
 		console.log(`${"=".repeat(60)}\n`);
 
+		const formattedData = formatResponse(analysisResult.data, videoId, youtubeUrl, {
+			videoTitle: downloadResult.data.videoTitle,
+			durationSeconds: downloadResult.data.durationSeconds,
+			method: "video",
+			processingTime: `${elapsed}s`
+		});
+
+		// Save to history (non-blocking)
+		saveToHistory(videoId, formattedData, analysisResult.data, "video");
+
 		return {
 			status: 200,
 			msg: "Video fact-checked successfully",
-			data: formatResponse(analysisResult.data, videoId, youtubeUrl, {
-				videoTitle: downloadResult.data.videoTitle,
-				durationSeconds: downloadResult.data.durationSeconds,
-				method: "video",
-				processingTime: `${elapsed}s`
-			})
+			data: formattedData
 		};
 
 	} catch (error) {
@@ -157,7 +210,92 @@ exports.analyzeYouTubeVideo = async (youtubeUrl) => {
 		return {
 			status: 500,
 			msg: "Internal server error during analysis",
-			data: error.message
+			data: null
+		};
+	}
+};
+
+/**
+ * Retrieves fact check history for a video
+ * @param {string} videoId - YouTube video ID
+ * @returns {Object} - History record or not found
+ */
+exports.getHistoryByVideoId = async (videoId) => {
+	try {
+		// Validate video ID format
+		if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+			return {
+				status: 400,
+				msg: "Invalid video ID format",
+				data: null
+			};
+		}
+
+		// Check if database is available
+		const mongoose = require("mongoose");
+		if (mongoose.connection.readyState !== 1) {
+			return {
+				status: 503,
+				msg: "Database not available",
+				data: null
+			};
+		}
+
+		const historyRecord = await FactCheckHistory.findByVideoId(videoId);
+
+		if (!historyRecord) {
+			return {
+				status: 404,
+				msg: "No history found for this video",
+				data: null
+			};
+		}
+
+		// Format the response to match the analyze API format
+		const formattedResponse = {
+			video: {
+				id: historyRecord.videoId,
+				url: historyRecord.youtubeUrl,
+				title: historyRecord.videoTitle,
+				topic: historyRecord.videoTopic
+			},
+			summary: historyRecord.summary,
+			factCheck: {
+				totalClaims: historyRecord.totalClaims,
+				correctClaims: historyRecord.analysisResult?.correctClaims || [],
+				incorrectClaims: historyRecord.analysisResult?.incorrectClaims || [],
+				speculativeClaims: historyRecord.analysisResult?.speculativeClaims || [],
+				correctPercentage: historyRecord.analysisResult?.correctPercentage || 0,
+				incorrectPercentage: historyRecord.analysisResult?.incorrectPercentage || 0,
+				speculativePercentage: historyRecord.analysisResult?.speculativePercentage || 0
+			},
+			trust: {
+				score: historyRecord.trustScore,
+				level: historyRecord.trustLevel
+			},
+			analysisNote: historyRecord.analysisResult?.analysisNote || "",
+			method: historyRecord.analysisMethod,
+			processingTime: `${historyRecord.processingTime}s`,
+			metadata: {
+				analyzedAt: historyRecord.lastAnalyzedAt,
+				requestCount: historyRecord.requestCount,
+				createdAt: historyRecord.createdAt,
+				updatedAt: historyRecord.updatedAt
+			}
+		};
+
+		return {
+			status: 200,
+			msg: "History retrieved successfully",
+			data: formattedResponse
+		};
+
+	} catch (error) {
+		console.error(`[FactChecker] History fetch error:`, error.message);
+		return {
+			status: 500,
+			msg: "Failed to retrieve history",
+			data: null
 		};
 	}
 };

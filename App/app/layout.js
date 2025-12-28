@@ -1,6 +1,7 @@
 import './globals.css';
 import { Header } from '@/components/Header';
 import { HistoryProvider } from '@/components/HistoryProvider';
+import { AuthProvider } from '@/components/AuthProvider';
 
 export const metadata = {
   metadataBase: new URL('https://factcheck-ai.vercel.app'),
@@ -71,14 +72,16 @@ export default function RootLayout({ children }) {
         <link rel="manifest" href="/manifest.json" />
       </head>
       <body>
-        <HistoryProvider>
-          <div className="app">
-            <Header />
-            <main className="main-content">
-              {children}
-            </main>
-          </div>
-        </HistoryProvider>
+        <AuthProvider>
+          <HistoryProvider>
+            <div className="app">
+              <Header />
+              <main className="main-content">
+                {children}
+              </main>
+            </div>
+          </HistoryProvider>
+        </AuthProvider>
         
         {/* Structured Data for Organization */}
         <script

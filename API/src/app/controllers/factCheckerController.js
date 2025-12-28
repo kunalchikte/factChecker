@@ -30,3 +30,31 @@ exports.analyzeVideo = async (req, res) => {
 	}
 };
 
+/**
+ * Controller to get fact check history by video ID
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+exports.getHistory = async (req, res) => {
+	try {
+		const { videoId } = req.params;
+		
+		if (!videoId) {
+			return res.status(400).json({
+				status: 400,
+				msg: "Video ID is required",
+				data: null
+			});
+		}
+		
+		const result = await factCheckerService.getHistoryByVideoId(videoId);
+		res.status(result.status).json(result);
+	} catch (err) {
+		// Don't expose internal errors
+		res.status(500).json({
+			status: 500,
+			msg: "Internal Server Error",
+			data: null
+		});
+	}
+};

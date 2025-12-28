@@ -1,139 +1,188 @@
 const jwt = require("jsonwebtoken");
-const userSevice = require("../../services/userService");
-// const accessPolicy = require("../../../config/accessPolicy.json");
 
+/**
+ * Simplified auth middleware for fact-checker API
+ * User management has been removed - this provides basic JWT verification
+ */
 
+/**
+ * Verifies JWT token
+ * @param {string} token - JWT token to verify
+ * @returns {Object} - Verification result
+ */
 const verifyByToken = async (token) => {
-	try{
-		const decodedToken = jwt.verify(token, process.env.TOKEN_SECRET);
-		const userId = decodedToken.userId;
-		const userType = decodedToken.userType;
-
-		let result = await userSevice.getUserByCondition({"_id":userId,"authToken":{$elemMatch:{"token":token}}});
-		if(result.status == 200 && result.data != null){
-			if(result.data.status=="active"){
-				return {status:true,msg:"success",data:{userId,userType}};
-			}else{
-				let msg = "Your account has been deactivated. Please contact the administrator for assistance.";
-				return {status:false, msg:msg, data:null};
-			}
+	try {
+		if (!token) {
+			return { status: false, msg: "Token required", data: null };
 		}
-		return {status:false,msg:"Invalid Token!",data:null};
-	} catch(err) { // eslint-disable-line
-		return {status:false,msg:"Valid token require!",data:null};
+
+		const decodedToken = jwt.verify(token, process.env.TOKEN_SECRET);
+		
+		if (!decodedToken) {
+			return { status: false, msg: "Invalid Token!", data: null };
+		}
+
+		return {
+			status: true,
+			msg: "success",
+			data: {
+				userId: decodedToken.userId,
+				userType: decodedToken.userType || "user"
+			}
+		};
+	} catch (err) {
+		if (err.name === "TokenExpiredError") {
+			return { status: false, msg: "Token expired", data: null };
+		}
+		if (err.name === "JsonWebTokenError") {
+			return { status: false, msg: "Invalid token", data: null };
+		}
+		return { status: false, msg: "Token verification failed", data: null };
 	}
 };
 
+/**
+ * Extracts and verifies token from request
+ * @param {Object} req - Express request object
+ * @returns {Object} - Verification result
+ */
 const verifyTokenFun = async (req) => {
-	try{
-		const reqContextMethod = req?.requestContext?.http?.method ?? req.method;
-		const reqContextPath = req?.requestContext?.http?.path ?? req.originalUrl;
-		const routUrl = (((reqContextMethod+reqContextPath).toLowerCase()).split("?"))[0]; // eslint-disable-line
-		
-		const token = req.query.token || req.headers.authorization.split(" ")[1];
+	try {
+		let token = null;
+
+		// Try to get token from query params first
+		if (req.query.token) {
+			token = req.query.token;
+		}
+		// Then try Authorization header
+		else if (req.headers.authorization) {
+			const authHeader = req.headers.authorization;
+			if (authHeader.startsWith("Bearer ")) {
+				token = authHeader.substring(7);
+			} else {
+				token = authHeader.split(" ")[1];
+			}
+		}
+
+		if (!token) {
+			return { status: false, msg: "Authorization token required", data: null };
+		}
+
 		const result = await verifyByToken(token);
-		if(result.status){
+		
+		if (result.status) {
 			req.userId = result.data.userId;
 			req.userType = result.data.userType;
 		}
+		
 		return result;
-	} catch(err) { // eslint-disable-line
-		return {status:false,msg:"Valid token require!",data:null};
+	} catch (err) {
+		return { status: false, msg: "Token verification failed", data: null };
 	}
 };
 
-exports.optionalVerifyToken = async (req, res, next) => {	
+/**
+ * Optional token verification - continues even if token is invalid
+ */
+exports.optionalVerifyToken = async (req, res, next) => {
 	await verifyTokenFun(req);
 	next();
 };
 
+/**
+ * Required token verification - blocks request if token is invalid
+ */
 exports.verifyToken = async (req, res, next) => {
 	const result = await verifyTokenFun(req);
-	if(result.status) {
+	if (result.status) {
 		next();
 	} else {
 		return res.status(401).json({ status: 401, msg: result.msg, data: null });
 	}
 };
 
-// Middleware for WebSocket Authentication
+/**
+ * WebSocket token verification
+ */
 exports.verifySocketToken = async (token, next) => {
-   	let result = await verifyByToken(token);
-    return next(result);
+	const result = await verifyByToken(token);
+	return next(result);
 };
 
 /**
-* This Function that update the token and token allows you to verify that the content hasn't been tampered with.
-*/
-
+ * Generate JWT token
+ * @param {Object} data - Data to encode in token
+ * @returns {Object} - Token generation result
+ */
 exports.genToken = async (data) => {
 	try {
-        
-		let timestmp = Date.now();
-		data.createdAt = timestmp;
-		let tokenExpire = "7d";
-		let token = jwt.sign(data, process.env.TOKEN_SECRET,{expiresIn:tokenExpire});
-		let deviceId = data.deviceId;
-        
-		let id = data.userId;
+		const tokenExpire = process.env.TOKEN_EXPIRE || "7d";
+		const token = jwt.sign(
+			{
+				userId: data.userId,
+				userType: data.userType || "user",
+				createdAt: Date.now()
+			},
+			process.env.TOKEN_SECRET,
+			{ expiresIn: tokenExpire }
+		);
 
-		//clear_old_token
-		await userSevice.updateUserByCondition({"_id":id},{$pull: {authToken:{token:{$exists: true},deviceId:deviceId,createdAt:{$exists: true}}}});
-		let result = await userSevice.updateUserByCondition({"_id":id},{ $push:{"authToken":{"token":token,"deviceId":deviceId,"createdAt":timestmp}}});
-		if(result.status == 200)
-			return {status:true,msg:"success",token:token};
-		else
-			throw new Error("Unable to generate token, Please try again!");
-
-	} catch(err) {
-		return {status:false,errMsg:err.toString()};
+		return { status: true, msg: "success", token: token };
+	} catch (err) {
+		return { status: false, msg: "Failed to generate token", data: null };
 	}
 };
 
 /**
-* This function which deletes the token from the previously added token in the data.
-*/
-
-exports.destroyToken = async (req, res) => { 
-	try {
-		const token = req.headers.authorization.split(" ")[1];
-		let id = req.userId;
-		let result = await userSevice.updateUserByCondition({"_id":id},{$pull:{authToken:{token:token}}});
-		await userSevice.updateUserByCondition({"_id":id},{fcmToken:""});
-		if(result.status == 200)
-			result.msg = "Successfully Logout";
-		res.status(result.status).json(result);
-	} catch(err) { // eslint-disable-line
-		res.status(400).json({status:400,msg:"Error",data:null});
-	}
-};
-
-/**
-* This Function use to verify correct App key & App seccrete for API calls
-*/
-const verifyKeysFun = (req) => {
-	try{
-		const apiKey = req.headers.api_key;
-		const apiSecrete = req.headers.api_secrete;
-		if(apiKey==process.env.API_KEY && apiSecrete==process.env.API_SECRETE){
-			return {status:200,msg:"sucess",data:null};
-		}
-		else
-			return {status:401,msg:"Please provide valid api key & secrete",data:null};
-	
-	} catch(err) {
-		return {status:401,msg:"Valid api key & secrete require",data:err};
-	}
-};
-
-exports.verifyKeys = (app) => {
-	app.use((req, res, next) => { // check default functions before call to route
-		const verifyKeysResult = verifyKeysFun(req);
-		if(verifyKeysResult.status!=200){
-			res.status(verifyKeysResult.status).json(verifyKeysResult);
-		}
-		else
-			next();
+ * Destroy token (logout) - simplified version
+ */
+exports.destroyToken = async (req, res) => {
+	// In a stateless JWT setup, we just return success
+	// Client should remove the token from their storage
+	res.status(200).json({
+		status: 200,
+		msg: "Successfully logged out",
+		data: null
 	});
 };
 
+/**
+ * API key verification middleware
+ */
+const verifyKeysFun = (req) => {
+	try {
+		const apiKey = req.headers.api_key;
+		const apiSecret = req.headers.api_secret || req.headers.api_secrete;
+
+		if (!process.env.API_KEY || !process.env.API_SECRET) {
+			// If API keys are not configured, skip verification
+			return { status: 200, msg: "success", data: null };
+		}
+
+		if (apiKey === process.env.API_KEY && apiSecret === process.env.API_SECRET) {
+			return { status: 200, msg: "success", data: null };
+		}
+
+		return { status: 401, msg: "Invalid API key or secret", data: null };
+	} catch (err) {
+		return { status: 401, msg: "API key verification failed", data: null };
+	}
+};
+
+/**
+ * Middleware to verify API keys on all routes
+ */
+exports.verifyKeys = (app) => {
+	app.use((req, res, next) => {
+		// Skip verification for health check
+		if (req.path === "/health") {
+			return next();
+		}
+
+		const verifyKeysResult = verifyKeysFun(req);
+		if (verifyKeysResult.status !== 200) {
+			return res.status(verifyKeysResult.status).json(verifyKeysResult);
+		}
+		next();
+	});
+};

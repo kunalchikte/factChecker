@@ -1,12 +1,15 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Search, History, BarChart3 } from 'lucide-react';
+import { Search, History, BarChart3, LogOut, User } from 'lucide-react';
+import { useAuth } from '@/components/AuthProvider';
 import './Header.css';
 
 export function Header() {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
 
   const isActive = (path) => pathname === path;
 
@@ -20,16 +23,39 @@ export function Header() {
           <span className="logo-text">FactCheck<span className="logo-accent">AI</span></span>
         </Link>
         
-        <nav className="nav-desktop">
-          <Link href="/" className={`nav-link ${isActive('/') ? 'active' : ''}`}>
-            <Search size={18} />
-            <span>Analyze</span>
-          </Link>
-          <Link href="/history" className={`nav-link ${isActive('/history') ? 'active' : ''}`}>
-            <History size={18} />
-            <span>History</span>
-          </Link>
-        </nav>
+        <div className="header-right">
+          <nav className="nav-desktop">
+            <Link href="/" className={`nav-link ${isActive('/') ? 'active' : ''}`}>
+              <Search size={18} />
+              <span>Analyze</span>
+            </Link>
+            <Link href="/history" className={`nav-link ${isActive('/history') ? 'active' : ''}`}>
+              <History size={18} />
+              <span>History</span>
+            </Link>
+          </nav>
+
+          {user && (
+            <div className="user-menu">
+              <div className="user-avatar">
+                {user.photoURL ? (
+                  <Image 
+                    src={user.photoURL} 
+                    alt={user.displayName || 'User'} 
+                    width={32} 
+                    height={32}
+                    unoptimized
+                  />
+                ) : (
+                  <User size={18} />
+                )}
+              </div>
+              <button className="logout-btn" onClick={logout} title="Sign out">
+                <LogOut size={16} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <nav className="nav-mobile">
@@ -45,4 +71,3 @@ export function Header() {
     </header>
   );
 }
-

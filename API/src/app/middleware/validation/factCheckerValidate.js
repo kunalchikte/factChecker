@@ -7,6 +7,11 @@ const val = require("./validator");
 const youtubeUrlPattern = /^https?:\/\/(www\.)?(youtube\.com\/(watch\?v=|embed\/|v\/|shorts\/)|youtu\.be\/)[a-zA-Z0-9_-]{11}(\?[a-zA-Z0-9_=&-]*)?$/;
 
 /**
+ * YouTube video ID pattern (exactly 11 characters)
+ */
+const videoIdPattern = /^[a-zA-Z0-9_-]{11}$/;
+
+/**
  * Sanitizes YouTube URL by extracting and rebuilding from video ID
  * Prevents URL-based attacks
  */
@@ -84,6 +89,30 @@ const conditions = {
 				return true;
 			}
 		}
+	},
+	videoId: {
+		in: ["params"],
+		trim: true,
+		notEmpty: {
+			errorMessage: "Video ID is required"
+		},
+		isLength: {
+			options: { min: 11, max: 11 },
+			errorMessage: "Video ID must be exactly 11 characters"
+		},
+		matches: {
+			options: videoIdPattern,
+			errorMessage: "Invalid video ID format. Must be 11 alphanumeric characters (including - and _)"
+		},
+		custom: {
+			options: (value) => {
+				// Additional security check for null bytes and injection
+				if (value.includes("\0") || /[;&|`$(){}[\]<>]/.test(value)) {
+					throw new Error("Invalid characters in video ID");
+				}
+				return true;
+			}
+		}
 	}
 };
 
@@ -93,6 +122,16 @@ const conditions = {
 exports.valAnalyzeVideo = (req, res, next) => {
 	const schema = {
 		youtubeUrl: conditions.youtubeUrl
+	};
+	val.validateSchema(req, res, next, schema);
+};
+
+/**
+ * Validates the get history request (path parameter)
+ */
+exports.valGetHistory = (req, res, next) => {
+	const schema = {
+		videoId: conditions.videoId
 	};
 	val.validateSchema(req, res, next, schema);
 };
