@@ -242,19 +242,32 @@ const uploadVideoToGemini = async (filePath, fileName, apiKey, mimeType = "video
 			maxContentLength: Infinity
 		});
 
+		const fileData = uploadResponse.data.file;
+		console.log(`[Gemini] Upload response:`, JSON.stringify({
+			name: fileData.name,
+			uri: fileData.uri,
+			state: fileData.state,
+			mimeType: fileData.mimeType
+		}));
+
 		return {
 			status: 200,
 			msg: "File uploaded",
 			data: {
-				fileUri: uploadResponse.data.file.uri,
-				fileName: uploadResponse.data.file.name,
-				mimeType: uploadResponse.data.file.mimeType
+				fileUri: fileData.uri,
+				fileName: fileData.name,
+				mimeType: fileData.mimeType,
+				state: fileData.state
 			}
 		};
 
 	} catch (error) {
-		console.error(`[Gemini] Upload error:`, error.message);
-		return { status: 500, msg: "Failed to upload video", data: error.message };
+		const errorMsg = error.response?.data?.error?.message || error.message;
+		console.error(`[Gemini] Upload error:`, errorMsg);
+		if (error.response?.data) {
+			console.error(`[Gemini] Upload error details:`, JSON.stringify(error.response.data));
+		}
+		return { status: 500, msg: `Failed to upload video: ${errorMsg}`, data: null };
 	}
 };
 
@@ -262,13 +275,15 @@ const uploadVideoToGemini = async (filePath, fileName, apiKey, mimeType = "video
  * Waits for file to be processed by Gemini (optimized polling)
  */
 const waitForFileProcessing = async (fileName, apiKey) => {
-	const maxAttempts = 60; // Increased max attempts
-	const delayMs = 2000; // Reduced polling interval from 5s to 2s for faster response
+	const maxAttempts = 60;
+	const delayMs = 3000; // 3 seconds between polls
+	let lastError = null;
 
 	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
 		try {
 			const response = await axios.get(
-				`${GEMINI_API_BASE}/v1beta/${fileName}?key=${apiKey}`
+				`${GEMINI_API_BASE}/v1beta/${fileName}?key=${apiKey}`,
+				{ timeout: 30000 }
 			);
 
 			const state = response.data.state;
@@ -282,13 +297,31 @@ const waitForFileProcessing = async (fileName, apiKey) => {
 			}
 
 			if (state === "FAILED") {
-				return { status: 500, msg: "File processing failed", data: null };
+				console.log(`[Gemini] File processing failed:`, response.data);
+				return { status: 500, msg: "File processing failed by Gemini", data: response.data };
 			}
 
+			// State is PROCESSING, continue polling
 			await new Promise(resolve => setTimeout(resolve, delayMs));
 
 		} catch (error) {
-			return { status: 500, msg: "Failed to check file status", data: error.message };
+			lastError = error;
+			const errorMsg = error.response?.data?.error?.message || error.message;
+			console.log(`[Gemini] Status check error (attempt ${attempt}): ${errorMsg}`);
+			
+			// If it's a 404, the file doesn't exist
+			if (error.response?.status === 404) {
+				return { status: 404, msg: "File not found in Gemini", data: null };
+			}
+			
+			// For other errors, retry a few times before giving up
+			if (attempt >= 3) {
+				// After 3 consecutive errors, give up
+				return { status: 500, msg: `Failed to check file status: ${errorMsg}`, data: null };
+			}
+			
+			// Wait and retry
+			await new Promise(resolve => setTimeout(resolve, delayMs));
 		}
 	}
 
