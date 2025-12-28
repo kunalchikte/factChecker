@@ -63,10 +63,7 @@ module.exports = function (app) {
 		optionsSuccessStatus: 200
 	};
 
-	// Handle preflight requests explicitly
-	app.options("*", cors(corsOptions));
-	
-	// Apply CORS to all routes
+	// Apply CORS to all routes (handles preflight OPTIONS automatically)
 	app.use(cors(corsOptions));
 
 	console.log(`CORS enabled: ${allowAll ? "ALL ORIGINS" : allowedOrigins.join(", ")}`);
