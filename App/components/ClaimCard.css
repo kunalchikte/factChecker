@@ -1,0 +1,146 @@
+.claim-card {
+  background: var(--surface-card);
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.claim-card:hover {
+  border-color: var(--border-hover);
+}
+
+.claim-verified {
+  border-left: 4px solid var(--status-verified);
+}
+
+.claim-false {
+  border-left: 4px solid var(--status-false);
+}
+
+.claim-speculative {
+  border-left: 4px solid var(--status-speculative);
+}
+
+.claim-header {
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.claim-number {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.claim-content {
+  flex: 1;
+}
+
+.claim-text {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin-bottom: 0.75rem;
+}
+
+.claim-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.claim-verified .claim-status {
+  color: var(--status-verified);
+}
+
+.claim-false .claim-status {
+  color: var(--status-false);
+}
+
+.claim-speculative .claim-status {
+  color: var(--status-speculative);
+}
+
+.expand-button {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.expand-button:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.claim-details {
+  padding: 0 1.25rem 1.25rem;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 0;
+  padding-top: 1rem;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.claim-reasoning h4 {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.claim-reasoning p {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.claim-confidence {
+  margin-top: 1rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.confidence-high {
+  background: var(--status-verified-bg);
+  color: var(--status-verified);
+}
+
+.confidence-medium {
+  background: var(--status-speculative-bg);
+  color: var(--status-speculative);
+}
+
+.confidence-low {
+  background: var(--status-false-bg);
+  color: var(--status-false);
+}
+

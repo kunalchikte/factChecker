@@ -1,0 +1,79 @@
+.trust-meter {
+  padding: 1.25rem;
+  border-radius: 12px;
+  background: var(--surface-card);
+}
+
+.trust-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin-bottom: 1rem;
+}
+
+.trust-high .trust-badge {
+  background: var(--status-verified-bg);
+  color: var(--status-verified);
+}
+
+.trust-medium .trust-badge {
+  background: var(--status-speculative-bg);
+  color: var(--status-speculative);
+}
+
+.trust-low .trust-badge {
+  background: var(--status-false-bg);
+  color: var(--status-false);
+}
+
+.trust-very-low .trust-badge {
+  background: var(--status-false-bg);
+  color: var(--status-false);
+}
+
+.trust-score-container {
+  margin-top: 0.5rem;
+}
+
+.trust-label {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.75rem;
+}
+
+.trust-blocks {
+  display: flex;
+  gap: 4px;
+}
+
+.trust-block {
+  flex: 1;
+  height: 8px;
+  background: var(--surface-hover);
+  border-radius: 4px;
+  transition: background 0.3s ease;
+}
+
+.trust-high .trust-block.filled {
+  background: var(--status-verified);
+}
+
+.trust-medium .trust-block.filled {
+  background: var(--status-speculative);
+}
+
+.trust-low .trust-block.filled {
+  background: var(--status-false);
+}
+
+.trust-very-low .trust-block.filled {
+  background: var(--status-false);
+}
+
+
