@@ -4,12 +4,33 @@ FROM node:22-alpine
 # Set working directory inside the container
 WORKDIR /app
 
-# Copy all files from host to container
+# Install system dependencies for yt-dlp
+# - python3: required by yt-dlp
+# - ffmpeg: required for merging video/audio streams
+# - yt-dlp: YouTube video downloader
+RUN apk add --no-cache \
+    python3 \
+    ffmpeg \
+    && apk add --no-cache --virtual .build-deps \
+    curl \
+    && curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
+    && chmod a+rx /usr/local/bin/yt-dlp \
+    && apk del .build-deps
+
+# Verify yt-dlp installation
+RUN yt-dlp --version
+
+# Copy package files first for better layer caching
+COPY package*.json ./
+
+# Install npm dependencies
+RUN npm install --omit=dev
+
+# Copy application code
 COPY . .
 
-# Install dependencies
-RUN npm install
-RUN npm audit fix
+# Create temp directory for video downloads
+RUN mkdir -p /app/temp && chmod 755 /app/temp
 
-# Start app in dev mode
+# Start app
 CMD ["npm", "run", "start:dev"]
