@@ -290,28 +290,30 @@ const waitForFileProcessing = async (fileName, apiKey) => {
 				{ 
 					timeout: 30000,
 					headers: {
-						"Accept": "application/json"
+						"Accept": "application/json",
+						"Content-Type": "application/json"
 					},
-					// Force JSON parsing, handle errors manually
-					transformResponse: [(data) => {
-						try {
-							return JSON.parse(data);
-						} catch (e) {
-							// Return raw data if not JSON
-							return { _raw: data, _parseError: true };
-						}
-					}]
+					// Don't auto-transform, handle manually
+					responseType: "text"
 				}
 			);
 
-			// Check if response was parseable
-			if (response.data._parseError) {
-				console.log(`[Gemini] Non-JSON response (attempt ${attempt}):`, 
-					typeof response.data._raw === 'string' ? response.data._raw.substring(0, 200) : 'unknown');
+			// Try to parse the response
+			let data;
+			try {
+				data = JSON.parse(response.data);
+			} catch (parseError) {
+				// Log the actual response for debugging
+				const rawResponse = typeof response.data === 'string' 
+					? response.data.substring(0, 500) 
+					: JSON.stringify(response.data).substring(0, 500);
+				console.log(`[Gemini] Non-JSON response (attempt ${attempt}): ${rawResponse}`);
+				console.log(`[Gemini] Response status: ${response.status}, headers:`, response.headers['content-type']);
+				
 				consecutiveErrors++;
 				
 				if (consecutiveErrors >= 5) {
-					return { status: 500, msg: "Gemini returning invalid responses", data: null };
+					return { status: 500, msg: "Gemini returning invalid responses. Check API key and quotas.", data: rawResponse };
 				}
 				
 				await new Promise(resolve => setTimeout(resolve, delayMs));
@@ -321,19 +323,19 @@ const waitForFileProcessing = async (fileName, apiKey) => {
 			// Reset error counter on successful parse
 			consecutiveErrors = 0;
 
-			const state = response.data.state;
+			const state = data.state;
 			
 			if (attempt % 5 === 0 || state === "ACTIVE") {
 				console.log(`[Gemini] Processing status: ${state} (attempt ${attempt}/${maxAttempts})`);
 			}
 
 			if (state === "ACTIVE") {
-				return { status: 200, msg: "File ready", data: response.data };
+				return { status: 200, msg: "File ready", data: data };
 			}
 
 			if (state === "FAILED") {
-				console.log(`[Gemini] File processing failed:`, response.data);
-				return { status: 500, msg: "File processing failed by Gemini", data: response.data };
+				console.log(`[Gemini] File processing failed:`, data);
+				return { status: 500, msg: "File processing failed by Gemini", data: data };
 			}
 
 			// State is PROCESSING, continue polling
