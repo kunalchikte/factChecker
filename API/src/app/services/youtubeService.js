@@ -163,18 +163,55 @@ exports.downloadVideo = async (youtubeUrl) => {
 		// Get video info first using safe URL
 		let videoInfo;
 		try {
-			const { stdout } = await execPromise(
-				`yt-dlp --dump-json --no-download -- "${safeUrl}"`,
+			console.log(`[YouTube] Fetching video info with yt-dlp...`);
+			const { stdout, stderr } = await execPromise(
+				`yt-dlp --dump-json --no-download --no-warnings --extractor-args "youtube:player_client=web" -- "${safeUrl}"`,
 				{ 
 					maxBuffer: 10 * 1024 * 1024,
-					timeout: 30000 // 30 second timeout for info fetch
+					timeout: 60000 // 60 second timeout for info fetch
 				}
 			);
+			if (stderr) {
+				console.log(`[YouTube] yt-dlp stderr: ${stderr}`);
+			}
 			videoInfo = JSON.parse(stdout);
+			console.log(`[YouTube] Video info fetched: ${videoInfo.title}`);
 		} catch (infoError) {
+			console.error(`[YouTube] yt-dlp error: ${infoError.message}`);
+			if (infoError.stderr) {
+				console.error(`[YouTube] yt-dlp stderr: ${infoError.stderr}`);
+			}
+			if (infoError.stdout) {
+				console.error(`[YouTube] yt-dlp stdout: ${infoError.stdout}`);
+			}
+			
+			// Check for common errors
+			const errorMsg = infoError.stderr || infoError.message || "";
+			if (errorMsg.includes("Video unavailable") || errorMsg.includes("Private video")) {
+				return {
+					status: 400,
+					msg: "Video is private or unavailable",
+					data: null
+				};
+			}
+			if (errorMsg.includes("Sign in to confirm your age")) {
+				return {
+					status: 400,
+					msg: "Video requires age verification",
+					data: null
+				};
+			}
+			if (errorMsg.includes("command not found") || errorMsg.includes("not recognized")) {
+				return {
+					status: 500,
+					msg: "yt-dlp is not installed on the server",
+					data: null
+				};
+			}
+			
 			return {
 				status: 400,
-				msg: "Could not fetch video information",
+				msg: "Could not fetch video information. Video may be restricted or unavailable.",
 				data: null
 			};
 		}
@@ -212,7 +249,8 @@ exports.downloadVideo = async (youtubeUrl) => {
 		const downloadStart = Date.now();
 		
 		// Use -- to separate URL from options (prevents URL being interpreted as option)
-		const downloadCmd = `yt-dlp -f "worstvideo[ext=mp4]+worstaudio[ext=m4a]/worst[ext=mp4]/worst" --merge-output-format mp4 --no-playlist -o "${filePath}" -- "${safeUrl}"`;
+		// Use extractor-args to avoid bot detection
+		const downloadCmd = `yt-dlp -f "worstvideo[ext=mp4]+worstaudio[ext=m4a]/worst[ext=mp4]/worst" --merge-output-format mp4 --no-playlist --extractor-args "youtube:player_client=web" -o "${filePath}" -- "${safeUrl}"`;
 
 		try {
 			await execPromise(downloadCmd, {
@@ -222,7 +260,7 @@ exports.downloadVideo = async (youtubeUrl) => {
 		} catch (downloadError) {
 			// Fallback: try any format
 			console.log(`[YouTube] Primary format failed, trying fallback...`);
-			const fallbackCmd = `yt-dlp -f "worst" --no-playlist -o "${filePath}" -- "${safeUrl}"`;
+			const fallbackCmd = `yt-dlp -f "worst" --no-playlist --extractor-args "youtube:player_client=web" -o "${filePath}" -- "${safeUrl}"`;
 			await execPromise(fallbackCmd, {
 				maxBuffer: 50 * 1024 * 1024,
 				timeout: 180000

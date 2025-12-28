@@ -7,15 +7,23 @@ WORKDIR /app
 # Install system dependencies for yt-dlp
 # - python3: required by yt-dlp
 # - ffmpeg: required for merging video/audio streams
-# - yt-dlp: YouTube video downloader
+# - deno: JavaScript runtime required by yt-dlp for YouTube extraction
 RUN apk add --no-cache \
     python3 \
     ffmpeg \
-    && apk add --no-cache --virtual .build-deps \
     curl \
-    && curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
-    && chmod a+rx /usr/local/bin/yt-dlp \
-    && apk del .build-deps
+    ca-certificates
+
+# Install Deno (JavaScript runtime for yt-dlp)
+RUN curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh
+ENV PATH="/usr/local/bin:$PATH"
+
+# Verify Deno installation
+RUN deno --version
+
+# Install yt-dlp
+RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
+    && chmod a+rx /usr/local/bin/yt-dlp
 
 # Verify yt-dlp installation
 RUN yt-dlp --version
