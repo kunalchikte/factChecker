@@ -17,7 +17,10 @@ module.exports = function (app) {
 			"http://localhost:5173", // Vite default
 			"http://localhost:8080",
 			"http://127.0.0.1:3000",
-			"http://127.0.0.1:5173"
+			"http://127.0.0.1:5173",
+			"http://3.110.103.228:3000",
+			"http://factchecker.kunalchikte.in",
+			"https://factchecker.kunalchikte.in"
 		];
 	}
 
