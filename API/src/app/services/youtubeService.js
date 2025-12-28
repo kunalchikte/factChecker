@@ -9,6 +9,17 @@ const execPromise = util.promisify(exec);
 // Temp directory for storing downloaded videos
 const TEMP_DIR = path.join(__dirname, "../../../temp");
 
+// Cookies file for YouTube authentication (bypasses bot detection)
+const COOKIES_FILE = path.join(__dirname, "../../../cookies/cookies.txt");
+
+// Check if cookies file exists
+const hasCookies = fs.existsSync(COOKIES_FILE);
+if (hasCookies) {
+	console.log("[YouTube] Cookies file found - will use for authentication");
+} else {
+	console.log("[YouTube] No cookies file found at cookies/cookies.txt - may encounter bot detection");
+}
+
 // Maximum file size allowed (100 MB) - prevents DoS via large file downloads
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
@@ -76,39 +87,54 @@ const buildSafeYouTubeUrl = (videoId) => {
 };
 
 /**
+ * Get cookies argument if cookies file exists
+ */
+const getCookiesArg = () => {
+	if (hasCookies) {
+		return `--cookies "${COOKIES_FILE}"`;
+	}
+	return "";
+};
+
+/**
  * yt-dlp extraction strategies to bypass bot detection
  * Tries multiple player clients and configurations
  */
 const YT_DLP_STRATEGIES = [
+	// Strategy 0: With cookies (most reliable if available)
+	...(hasCookies ? [{
+		name: "cookies",
+		args: getCookiesArg()
+	}] : []),
 	// Strategy 1: Android client (most reliable for bot bypass)
 	{
 		name: "android",
-		args: '--extractor-args "youtube:player_client=android"'
+		args: `--extractor-args "youtube:player_client=android" ${getCookiesArg()}`
 	},
 	// Strategy 2: iOS client
 	{
 		name: "ios", 
-		args: '--extractor-args "youtube:player_client=ios"'
+		args: `--extractor-args "youtube:player_client=ios" ${getCookiesArg()}`
 	},
 	// Strategy 3: TV embedded client
 	{
 		name: "tv_embedded",
-		args: '--extractor-args "youtube:player_client=tv_embedded"'
+		args: `--extractor-args "youtube:player_client=tv_embedded" ${getCookiesArg()}`
 	},
 	// Strategy 4: Media connect client
 	{
 		name: "mediaconnect",
-		args: '--extractor-args "youtube:player_client=mediaconnect"'
+		args: `--extractor-args "youtube:player_client=mediaconnect" ${getCookiesArg()}`
 	},
 	// Strategy 5: Web client with user agent
 	{
 		name: "web_with_ua",
-		args: '--extractor-args "youtube:player_client=web" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"'
+		args: `--extractor-args "youtube:player_client=web" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" ${getCookiesArg()}`
 	},
 	// Strategy 6: Default (no special args)
 	{
 		name: "default",
-		args: ""
+		args: getCookiesArg()
 	}
 ];
 

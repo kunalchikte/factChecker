@@ -41,5 +41,8 @@ COPY . .
 # Create temp directory for video downloads
 RUN mkdir -p /app/temp && chmod 755 /app/temp
 
+# Create cookies directory (cookies.txt should be mounted or added separately)
+RUN mkdir -p /app/cookies && chmod 755 /app/cookies
+
 # Start app
 CMD ["npm", "run", "start:dev"]

@@ -1,0 +1,12 @@
+# Place your cookies.txt file here
+# This file is required for yt-dlp to bypass YouTube bot detection
+# 
+# To export cookies:
+# 1. Install browser extension (Chrome: "Get cookies.txt LOCALLY")
+# 2. Log into YouTube with a Google account
+# 3. Go to youtube.com
+# 4. Click extension and export to cookies.txt
+# 5. Copy cookies.txt to this folder
+#
+# IMPORTANT: Never commit cookies.txt to git!
+
