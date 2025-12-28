@@ -76,6 +76,126 @@ const buildSafeYouTubeUrl = (videoId) => {
 };
 
 /**
+ * yt-dlp extraction strategies to bypass bot detection
+ * Tries multiple player clients and configurations
+ */
+const YT_DLP_STRATEGIES = [
+	// Strategy 1: Android client (most reliable for bot bypass)
+	{
+		name: "android",
+		args: '--extractor-args "youtube:player_client=android"'
+	},
+	// Strategy 2: iOS client
+	{
+		name: "ios", 
+		args: '--extractor-args "youtube:player_client=ios"'
+	},
+	// Strategy 3: TV embedded client
+	{
+		name: "tv_embedded",
+		args: '--extractor-args "youtube:player_client=tv_embedded"'
+	},
+	// Strategy 4: Media connect client
+	{
+		name: "mediaconnect",
+		args: '--extractor-args "youtube:player_client=mediaconnect"'
+	},
+	// Strategy 5: Web client with user agent
+	{
+		name: "web_with_ua",
+		args: '--extractor-args "youtube:player_client=web" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"'
+	},
+	// Strategy 6: Default (no special args)
+	{
+		name: "default",
+		args: ""
+	}
+];
+
+/**
+ * Tries to fetch video info using multiple strategies
+ * @param {string} safeUrl - Sanitized YouTube URL
+ * @returns {Object} - Video info or error
+ */
+const fetchVideoInfoWithRetry = async (safeUrl) => {
+	for (const strategy of YT_DLP_STRATEGIES) {
+		try {
+			console.log(`[YouTube] Trying strategy: ${strategy.name}...`);
+			
+			const cmd = `yt-dlp --dump-json --no-download --no-warnings ${strategy.args} -- "${safeUrl}"`;
+			
+			const { stdout, stderr } = await execPromise(cmd, {
+				maxBuffer: 10 * 1024 * 1024,
+				timeout: 60000
+			});
+			
+			if (stderr && stderr.includes("ERROR")) {
+				console.log(`[YouTube] Strategy ${strategy.name} failed: ${stderr.substring(0, 100)}`);
+				continue;
+			}
+			
+			const videoInfo = JSON.parse(stdout);
+			console.log(`[YouTube] ✓ Strategy ${strategy.name} succeeded: ${videoInfo.title}`);
+			return { success: true, data: videoInfo, strategy: strategy.name };
+			
+		} catch (error) {
+			const errorMsg = error.stderr || error.message || "";
+			console.log(`[YouTube] Strategy ${strategy.name} failed: ${errorMsg.substring(0, 100)}`);
+			
+			// If it's not a bot detection error, don't try other strategies
+			if (!errorMsg.includes("Sign in") && !errorMsg.includes("bot") && !errorMsg.includes("confirm")) {
+				if (errorMsg.includes("Video unavailable") || errorMsg.includes("Private video")) {
+					return { success: false, error: "Video is private or unavailable" };
+				}
+				if (errorMsg.includes("age")) {
+					return { success: false, error: "Video requires age verification" };
+				}
+			}
+			// Continue to next strategy for bot detection errors
+		}
+	}
+	
+	return { success: false, error: "All extraction strategies failed. YouTube may be blocking this server's IP." };
+};
+
+/**
+ * Downloads video using the successful strategy
+ * @param {string} safeUrl - Sanitized YouTube URL
+ * @param {string} filePath - Output file path
+ * @param {string} strategyArgs - yt-dlp args from successful strategy
+ * @returns {boolean} - Success status
+ */
+const downloadWithStrategy = async (safeUrl, filePath, strategyArgs) => {
+	const formats = [
+		// Try audio only first (fastest, smallest)
+		'-f "bestaudio[ext=m4a]/bestaudio"',
+		// Then try worst video (small file)
+		'-f "worstvideo[ext=mp4]+worstaudio[ext=m4a]/worst[ext=mp4]/worst"',
+		// Finally try any format
+		'-f "worst"'
+	];
+	
+	for (const format of formats) {
+		try {
+			console.log(`[YouTube] Downloading with format: ${format.substring(0, 30)}...`);
+			
+			const cmd = `yt-dlp ${format} --merge-output-format mp4 --no-playlist ${strategyArgs} -o "${filePath}" -- "${safeUrl}"`;
+			
+			await execPromise(cmd, {
+				maxBuffer: 50 * 1024 * 1024,
+				timeout: 300000 // 5 minutes
+			});
+			
+			return true;
+		} catch (error) {
+			console.log(`[YouTube] Format failed, trying next...`);
+		}
+	}
+	
+	return false;
+};
+
+/**
  * Fetches transcript from YouTube (FAST - preferred method)
  * @param {string} videoId - The YouTube video ID
  * @returns {Object} - Result with transcript data
@@ -140,6 +260,7 @@ exports.getTranscript = async (videoId) => {
 
 /**
  * Downloads a YouTube video to temp directory using yt-dlp (SLOW - fallback method)
+ * Uses multiple strategies to bypass YouTube bot detection
  * @param {string} youtubeUrl - The YouTube video URL
  * @returns {Object} - Result with file path and metadata
  */
@@ -160,63 +281,24 @@ exports.downloadVideo = async (youtubeUrl) => {
 		// Build safe URL from validated video ID (prevents command injection)
 		const safeUrl = buildSafeYouTubeUrl(videoId);
 
-		// Get video info first using safe URL
-		let videoInfo;
-		try {
-			console.log(`[YouTube] Fetching video info with yt-dlp...`);
-			const { stdout, stderr } = await execPromise(
-				`yt-dlp --dump-json --no-download --no-warnings --extractor-args "youtube:player_client=web" -- "${safeUrl}"`,
-				{ 
-					maxBuffer: 10 * 1024 * 1024,
-					timeout: 60000 // 60 second timeout for info fetch
-				}
-			);
-			if (stderr) {
-				console.log(`[YouTube] yt-dlp stderr: ${stderr}`);
-			}
-			videoInfo = JSON.parse(stdout);
-			console.log(`[YouTube] Video info fetched: ${videoInfo.title}`);
-		} catch (infoError) {
-			console.error(`[YouTube] yt-dlp error: ${infoError.message}`);
-			if (infoError.stderr) {
-				console.error(`[YouTube] yt-dlp stderr: ${infoError.stderr}`);
-			}
-			if (infoError.stdout) {
-				console.error(`[YouTube] yt-dlp stdout: ${infoError.stdout}`);
-			}
-			
-			// Check for common errors
-			const errorMsg = infoError.stderr || infoError.message || "";
-			if (errorMsg.includes("Video unavailable") || errorMsg.includes("Private video")) {
-				return {
-					status: 400,
-					msg: "Video is private or unavailable",
-					data: null
-				};
-			}
-			if (errorMsg.includes("Sign in to confirm your age")) {
-				return {
-					status: 400,
-					msg: "Video requires age verification",
-					data: null
-				};
-			}
-			if (errorMsg.includes("command not found") || errorMsg.includes("not recognized")) {
-				return {
-					status: 500,
-					msg: "yt-dlp is not installed on the server",
-					data: null
-				};
-			}
-			
+		// Try to fetch video info with multiple strategies
+		console.log(`[YouTube] Fetching video info with yt-dlp...`);
+		const infoResult = await fetchVideoInfoWithRetry(safeUrl);
+		
+		if (!infoResult.success) {
+			console.log(`[YouTube] ✗ All strategies failed: ${infoResult.error}`);
 			return {
 				status: 400,
-				msg: "Could not fetch video information. Video may be restricted or unavailable.",
+				msg: infoResult.error,
 				data: null
 			};
 		}
 
-		const videoTitle = (videoInfo.title || "Unknown Title").substring(0, 200); // Limit title length
+		const videoInfo = infoResult.data;
+		const successfulStrategy = YT_DLP_STRATEGIES.find(s => s.name === infoResult.strategy);
+		const strategyArgs = successfulStrategy ? successfulStrategy.args : "";
+
+		const videoTitle = (videoInfo.title || "Unknown Title").substring(0, 200);
 		const durationSeconds = videoInfo.duration || 0;
 
 		// Security check: Limit video duration
@@ -244,32 +326,23 @@ exports.downloadVideo = async (youtubeUrl) => {
 			};
 		}
 
-		// Download smallest video quality for faster processing
+		// Download video
 		console.log(`[YouTube] Starting download (optimized for speed)...`);
 		const downloadStart = Date.now();
 		
-		// Use -- to separate URL from options (prevents URL being interpreted as option)
-		// Use extractor-args to avoid bot detection
-		const downloadCmd = `yt-dlp -f "worstvideo[ext=mp4]+worstaudio[ext=m4a]/worst[ext=mp4]/worst" --merge-output-format mp4 --no-playlist --extractor-args "youtube:player_client=web" -o "${filePath}" -- "${safeUrl}"`;
-
-		try {
-			await execPromise(downloadCmd, {
-				maxBuffer: 50 * 1024 * 1024,
-				timeout: 180000 // 3 minutes
-			});
-		} catch (downloadError) {
-			// Fallback: try any format
-			console.log(`[YouTube] Primary format failed, trying fallback...`);
-			const fallbackCmd = `yt-dlp -f "worst" --no-playlist --extractor-args "youtube:player_client=web" -o "${filePath}" -- "${safeUrl}"`;
-			await execPromise(fallbackCmd, {
-				maxBuffer: 50 * 1024 * 1024,
-				timeout: 180000
-			});
+		const downloadSuccess = await downloadWithStrategy(safeUrl, filePath, strategyArgs);
+		
+		if (!downloadSuccess) {
+			return {
+				status: 500,
+				msg: "Failed to download video after trying all formats",
+				data: null
+			};
 		}
 		
 		console.log(`[YouTube] Download completed in ${((Date.now() - downloadStart) / 1000).toFixed(1)}s`);
 
-		// Find the downloaded file
+		// Find the downloaded file (yt-dlp may change extension)
 		let actualFilePath = filePath;
 		
 		if (!fs.existsSync(filePath)) {
@@ -304,7 +377,6 @@ exports.downloadVideo = async (youtubeUrl) => {
 		
 		// Security check: Limit file size
 		if (fileStats.size > MAX_FILE_SIZE) {
-			// Delete the oversized file
 			fs.unlinkSync(actualFilePath);
 			return {
 				status: 400,
@@ -329,7 +401,7 @@ exports.downloadVideo = async (youtubeUrl) => {
 		};
 		const mimeType = mimeTypeMap[fileExtension] || "video/mp4";
 		
-		console.log(`[YouTube] File downloaded: ${actualFileName} (${(fileStats.size / 1024 / 1024).toFixed(2)} MB, ${mimeType})`);
+		console.log(`[YouTube] ✓ File downloaded: ${actualFileName} (${(fileStats.size / 1024 / 1024).toFixed(2)} MB, ${mimeType})`);
 
 		return {
 			status: 200,
@@ -346,10 +418,11 @@ exports.downloadVideo = async (youtubeUrl) => {
 		};
 
 	} catch (error) {
+		console.error(`[YouTube] Download error: ${error.message}`);
 		return {
 			status: 500,
 			msg: "Failed to download video",
-			data: null // Don't expose internal error messages
+			data: null
 		};
 	}
 };
