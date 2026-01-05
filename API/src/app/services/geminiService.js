@@ -6,7 +6,7 @@ const GEMINI_API_BASE = "https://generativelanguage.googleapis.com";
 
 // Model selection for multimodal (video/audio) support
 // Available models: gemini-1.5-flash-latest, gemini-1.5-pro-latest, gemini-2.0-flash-exp
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash-exp";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
 
 console.log(`[Gemini] Using model: ${GEMINI_MODEL}`);
 

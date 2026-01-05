@@ -110,7 +110,65 @@ exports.analyzeYouTubeVideo = async (youtubeUrl) => {
 		const videoId = urlValidation.videoId;
 		console.log(`[FactChecker] Video ID: ${videoId}`);
 
-		// Step 2: Try to get transcript first (FAST method - ~3-5 seconds)
+		// Step 2: Check if we already have cached result in database
+		const mongoose = require("mongoose");
+		if (mongoose.connection.readyState === 1) {
+			console.log(`\n[FactChecker] Checking cache for existing analysis...`);
+			const cachedResult = await FactCheckHistory.findByVideoId(videoId);
+			
+			if (cachedResult && cachedResult.analysisResult) {
+				console.log(`[FactChecker] ✓ Found cached result! Returning immediately.`);
+				console.log(`${"=".repeat(60)}\n`);
+
+				// Increment request count (non-blocking)
+				FactCheckHistory.findOneAndUpdate(
+					{ videoId },
+					{ $inc: { requestCount: 1 }, lastAnalyzedAt: new Date() }
+				).catch(() => {}); // Ignore errors
+
+				// Format and return cached response
+				const formattedResponse = {
+					video: {
+						id: cachedResult.videoId,
+						url: cachedResult.youtubeUrl,
+						title: cachedResult.videoTitle,
+						topic: cachedResult.videoTopic,
+						durationSeconds: cachedResult.analysisResult?.durationSeconds || 0
+					},
+					summary: cachedResult.summary,
+					factCheck: {
+						totalClaims: cachedResult.totalClaims,
+						correctClaims: cachedResult.analysisResult?.correctClaims || [],
+						incorrectClaims: cachedResult.analysisResult?.incorrectClaims || [],
+						speculativeClaims: cachedResult.analysisResult?.speculativeClaims || [],
+						correctPercentage: cachedResult.analysisResult?.correctPercentage || 0,
+						incorrectPercentage: cachedResult.analysisResult?.incorrectPercentage || 0,
+						speculativePercentage: cachedResult.analysisResult?.speculativePercentage || 0
+					},
+					trust: {
+						score: cachedResult.trustScore,
+						level: cachedResult.trustLevel
+					},
+					analysisNote: cachedResult.analysisResult?.analysisNote || "",
+					method: cachedResult.analysisMethod,
+					processingTime: "0s (cached)",
+					cached: true,
+					metadata: {
+						originalAnalyzedAt: cachedResult.createdAt,
+						requestCount: cachedResult.requestCount + 1
+					}
+				};
+
+				return {
+					status: 200,
+					msg: "Video fact-check retrieved from cache",
+					data: formattedResponse
+				};
+			}
+			console.log(`[FactChecker] No cached result found. Proceeding with analysis...`);
+		}
+
+		// Step 3: Try to get transcript first (FAST method - ~3-5 seconds)
 		console.log(`\n[FactChecker] STEP 1: Attempting transcript fetch (fast method)...`);
 		const transcriptResult = await youtubeService.getTranscript(videoId);
 

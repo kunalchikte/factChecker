@@ -114,10 +114,12 @@ export function VideoInfo({ video }) {
           {video.topic && (
             <span className="video-topic">{video.topic}</span>
           )}
-          <div className="video-duration">
-            <Clock size={14} />
-            <span>{formatDuration(video.durationSeconds)}</span>
-          </div>
+          {formatDuration(video.durationSeconds) && (
+            <div className="video-duration">
+              <Clock size={14} />
+              <span>{formatDuration(video.durationSeconds)}</span>
+            </div>
+          )}
         </div>
         
         <a 
